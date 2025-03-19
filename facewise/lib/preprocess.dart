@@ -17,7 +17,7 @@ class FaceProcessor {
         .toList();
   }
 
-  // void dispose() {
-  //   _faceDetector.close();
-  // }
+  void dispose() {
+    _faceDetector.close();
+  }
 }

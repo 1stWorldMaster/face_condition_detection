@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'preprocess.dart';
 import 'main.dart';
-import 'dart:ui';
 
 class FaceDetectionScreen extends StatefulWidget {
   @override
@@ -30,8 +29,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _controller.initialize().then((_) {
       if (!mounted) return;
       setState(() {});
-      // Start the image stream for continuous detection
-      _controller.startImageStream(_processCameraImage);
     }).catchError((e) {
       print('Error initializing camera: $e');
     });
@@ -48,24 +45,22 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _initializeCamera();
   }
 
-  void _processCameraImage(CameraImage image) async {
-    if (isDetecting || !mounted) return;
+  Future<void> _detectFaces() async {
+    if (isDetecting || !_controller.value.isInitialized) return;
 
     setState(() => isDetecting = true);
 
-    final List<Rect> detectedFaces = await _faceProcessor.detectFacesFromStream(image, _controller.description);
+    final XFile picture = await _controller.takePicture();
+    final List<Rect> detectedFaces = await _faceProcessor.detectFaces(picture);
 
-    if (mounted) {
-      setState(() {
-        faceCoordinates = detectedFaces;
-        isDetecting = false;
-      });
-    }
+    setState(() {
+      faceCoordinates = detectedFaces;
+      isDetecting = false;
+    });
   }
 
   @override
   void dispose() {
-    _controller.stopImageStream();
     _controller.dispose();
     _faceProcessor.dispose();
     super.dispose();
@@ -84,6 +79,14 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
           CustomPaint(
             painter: FacePainter(faceCoordinates),
             child: Container(),
+          ),
+          Positioned(
+            bottom: 20,
+            left: MediaQuery.of(context).size.width / 2 - 50,
+            child: ElevatedButton(
+              onPressed: _detectFaces,
+              child: Text(isDetecting ? 'Detecting...' : 'Detect Faces'),
+            ),
           ),
           Positioned(
             top: 20,
