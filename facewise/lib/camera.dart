@@ -1,36 +1,49 @@
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'preprocess.dart';
+import 'package:flutter/material.dart';
 import 'main.dart';
+import 'preprocess.dart';
 
 class FaceDetectionScreen extends StatefulWidget {
+  const FaceDetectionScreen({super.key});
+
   @override
   _FaceDetectionScreenState createState() => _FaceDetectionScreenState();
 }
 
 class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   late CameraController _controller;
-  List<Rect> faceCoordinates = [];
-  bool isDetecting = false;
+  late FaceProcessor _faceProcessor;
   int currentCameraIndex = 1; // 0 for back camera, 1 for front camera typically
-  final FaceProcessor _faceProcessor = FaceProcessor();
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    _faceProcessor = FaceProcessor(
+      onFacesDetected: (faces) {
+        setState(() {});
+      },
+    );
   }
 
   void _initializeCamera() {
     _controller = CameraController(
       cameras[currentCameraIndex],
       ResolutionPreset.medium,
+      enableAudio: false,
     );
     _controller.initialize().then((_) {
       if (!mounted) return;
+      _startRealTimeDetection();
       setState(() {});
     }).catchError((e) {
       print('Error initializing camera: $e');
+    });
+  }
+
+  void _startRealTimeDetection() {
+    _controller.startImageStream((CameraImage image) {
+      _faceProcessor.processCameraImage(image, _controller.description);
     });
   }
 
@@ -45,22 +58,9 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _initializeCamera();
   }
 
-  Future<void> _detectFaces() async {
-    if (isDetecting || !_controller.value.isInitialized) return;
-
-    setState(() => isDetecting = true);
-
-    final XFile picture = await _controller.takePicture();
-    final List<Rect> detectedFaces = await _faceProcessor.detectFaces(picture);
-
-    setState(() {
-      faceCoordinates = detectedFaces;
-      isDetecting = false;
-    });
-  }
-
   @override
   void dispose() {
+    _controller.stopImageStream();
     _controller.dispose();
     _faceProcessor.dispose();
     super.dispose();
@@ -69,7 +69,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_controller.value.isInitialized) {
-      return Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Scaffold(
@@ -77,23 +77,15 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         children: [
           CameraPreview(_controller),
           CustomPaint(
-            painter: FacePainter(faceCoordinates),
+            painter: FacePainter(_faceProcessor.faceCoordinates),
             child: Container(),
-          ),
-          Positioned(
-            bottom: 20,
-            left: MediaQuery.of(context).size.width / 2 - 50,
-            child: ElevatedButton(
-              onPressed: _detectFaces,
-              child: Text(isDetecting ? 'Detecting...' : 'Detect Faces'),
-            ),
           ),
           Positioned(
             top: 20,
             right: 20,
             child: ElevatedButton(
               onPressed: _switchCamera,
-              child: Icon(Icons.flip_camera_android),
+              child: const Icon(Icons.flip_camera_android),
             ),
           ),
         ],
