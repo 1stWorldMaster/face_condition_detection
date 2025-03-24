@@ -8,9 +8,8 @@ plugins {
 android {
     namespace = "com.example.facewise"
     compileSdk = flutter.compileSdkVersion
-//    ndkVersion = "26.3.11579264"
     ndkVersion = "27.0.12077973"
-//    ndkVersion = flutter.ndkVersion
+
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -26,8 +25,7 @@ android {
         applicationId = "com.example.facewise"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-//        minSdk = flutter.minSdkVersion
-        minSdk = 24
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

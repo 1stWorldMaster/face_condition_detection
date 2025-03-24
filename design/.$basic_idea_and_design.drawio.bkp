@@ -69,7 +69,7 @@
         <mxCell id="PBmmNN7Am2uPRvB1Cqt0-26" value="Frames" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
           <mxGeometry x="670" y="320" width="120" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="PBmmNN7Am2uPRvB1Cqt0-27" value="- Give the option to select the camera&lt;div&gt;- Tune the sample time for the smooth operation of the application&amp;nbsp;&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="PBmmNN7Am2uPRvB1Cqt0-27" value="- Apply the filter to that it does not affected by the brightness basically by reducing the brightness or the contrast&lt;div&gt;- Convert the image to greyscale&amp;nbsp;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
           <mxGeometry x="910" y="310" width="340" height="340" as="geometry" />
         </mxCell>
         <mxCell id="PBmmNN7Am2uPRvB1Cqt0-29" value="Preprocessing" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">

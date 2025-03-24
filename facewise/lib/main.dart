@@ -1,27 +1,22 @@
-import 'package:camera/camera.dart';  // Add this import
 import 'package:flutter/material.dart';
-import 'camera.dart';
+import 'package:camera/camera.dart';
+import 'package:facewise/camera/camera.dart';
 
-late List<CameraDescription> cameras;
-
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    cameras = await availableCameras();
-  } catch (e) {
-    print('Error getting available cameras: $e');
-    cameras = [];
-  }
-  runApp(const MyApp());
+  final cameras = await availableCameras();
+  runApp(FaceDetectionApp(cameras: cameras));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class FaceDetectionApp extends StatelessWidget {
+  final List<CameraDescription> cameras;
+  const FaceDetectionApp({super.key, required this.cameras});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: FaceDetectionScreen(),
+    return MaterialApp(
+      title: 'Face Detection with Camera Switch',
+      home: FaceDetectionScreen(cameras: cameras),
     );
   }
 }
