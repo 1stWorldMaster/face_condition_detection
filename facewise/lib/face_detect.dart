@@ -2,14 +2,32 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
+import 'package:tflite_flutter/tflite_flutter.dart';
 
 class FaceProcessor {
+  static Interpreter? _interpreter;
+
+  // Load the TFLite model when the class is first used
+  static Future<void> _loadModel() async {
+    try {
+      _interpreter = await Interpreter.fromAsset('model.tflite');
+      print("Model loaded successfully");
+    } catch (e) {
+      print("Error loading model: $e");
+    }
+  }
+
   static Future<Uint8List?> processFace({
     required CameraImage cameraImage,
     required Face face,
     required int sensorOrientation, // Camera sensor orientation (e.g., 90, 180, 270)
   }) async {
     try {
+      // Load the model if not already loaded
+      if (_interpreter == null) {
+        await _loadModel();
+      }
+
       // Step 1: Convert CameraImage to img.Image (in color initially)
       img.Image originalImage = _convertCameraImageToImage(cameraImage);
 
@@ -47,7 +65,16 @@ class FaceProcessor {
       // Step 5: Convert to grayscale (black and white)
       final grayscaleFace = img.grayscale(resizedFace);
 
-      // Step 6: Convert to Uint8List (JPEG bytes)
+      // Step 6: Prepare input for the model (1, 48, 48, 1)
+      final input = _prepareInputForModel(grayscaleFace);
+
+      // Step 7: Run the model and get the output
+      final output = _runModel(input);
+
+      // Step 8: Print the model output (assuming integer output)
+      print("Model output: $output");
+
+      // Step 9: Convert to Uint8List (JPEG bytes) for return (if needed)
       final imageBytes = Uint8List.fromList(img.encodeJpg(grayscaleFace));
 
       return imageBytes;
@@ -55,6 +82,38 @@ class FaceProcessor {
       print("Error processing face: $e");
       return null;
     }
+  }
+
+  static List<List<List<List<double>>>> _prepareInputForModel(img.Image grayscaleFace) {
+    // Convert the grayscale image to a 1x48x48x1 tensor
+    final input = List.generate(
+      1,
+          (_) => List.generate(
+        48,
+            (y) => List.generate(
+          48,
+              (x) => [grayscaleFace.getPixel(x, y).r / 255.0], // Normalize to [0, 1]
+        ),
+      ),
+    );
+    return input;
+  }
+
+  static int _runModel(List<List<List<List<double>>>> input) {
+    if (_interpreter == null) {
+      print("Model not loaded");
+      return -1; // Default error value
+    }
+
+    // Define the output tensor shape (adjust based on your model's output)
+    // Assuming the model outputs a single integer (e.g., classification)
+    var output = List.filled(1, 0); // Modify based on actual output shape
+
+    // Run inference
+    _interpreter!.run(input, output);
+
+    // Return the first integer value from the output
+    return output[0];
   }
 
   static img.Image _convertCameraImageToImage(CameraImage cameraImage) {
