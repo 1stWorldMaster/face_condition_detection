@@ -28,7 +28,10 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   int _currentCameraIndex = 1; // 0 for front, 1 for back
   bool _isProcessing = false;
   DateTime? _lastProcessed;
-  bool _isCameraInitialized = false; // Track initialization state
+  bool _isCameraInitialized = false;
+
+  // List of emotions
+  final List<String> emotions = ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"];
 
   @override
   void initState() {
@@ -53,7 +56,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       await _controller.initialize();
       await _controller.startImageStream(_processImage);
       setState(() {
-        _isCameraInitialized = true; // Update state when ready
+        _isCameraInitialized = true;
         _status.value = 'Detecting...';
       });
     } catch (e) {
@@ -121,9 +124,17 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
           sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
         );
 
-        _status.value = "Face detected";
         _processedFace.value = faceBytes;
-        print(faceBytes);
+
+        // Find the emotion with the highest probability
+        if (faceBytes != null && faceBytes.length == emotions.length) {
+          final maxProbIndex = faceBytes.indexOf(faceBytes.reduce((a, b) => a > b ? a : b));
+          final detectedEmotion = emotions[maxProbIndex];
+          final probability = faceBytes[maxProbIndex];
+          _status.value = "$detectedEmotion (${(probability * 100).toStringAsFixed(1)}%)";
+        } else {
+          _status.value = "Face detected";
+        }
       } else {
         _status.value = "Face not detected";
       }
