@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:facewise/camera/camera.dart';
+import 'package:facewise/camera/camera.dart'; // Ensure this contains FaceDetectionScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +16,7 @@ class FaceDetectionApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Face Detection with Camera Switch',
-      home: FaceDetectionScreen(cameras: cameras),
+      home: FaceDetectionScreen(cameras: cameras), // Ensure this class exists
     );
   }
 }

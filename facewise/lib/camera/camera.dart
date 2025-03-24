@@ -3,9 +3,6 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:facewise/face_detect.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 
 class FaceDetectionScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -27,7 +24,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     ),
   );
   String _status = 'Initializing...';
-  int _currentCameraIndex = 0; // 0 for front, 1 for back (if available)
+  int _currentCameraIndex = 1; // 0 for front, 1 for back (if available)
   Uint8List? _processedFace;
 
   @override
@@ -56,7 +53,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   int _frameCounter = 0;
   void _processImage(CameraImage image) async {
     _frameCounter++;
-    if (_frameCounter % 3 != 0) return;
+    if (_frameCounter % 10 != 0) return;
 
     final formatGroup = image.format.group;
     Uint8List bytes;
