@@ -100,7 +100,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       bytes: bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: InputImageRotation.rotation0deg,
+        rotation: _getRotationForCamera(widget.cameras[_currentCameraIndex]),
         format: format,
         bytesPerRow: image.planes[0].bytesPerRow,
       ),
@@ -114,6 +114,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       final faceBytes = await FaceProcessor.processFace(
         cameraImage: image,
         face: faces[0],
+        sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
       );
 
       setState(() {
@@ -127,6 +128,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       final result = await FaceProcessor.processFace(
         cameraImage: image,
         face: faces[0],
+        sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
       );
     } else {
       setState(() {
@@ -136,11 +138,17 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   }
 
   InputImageRotation _getRotationForCamera(CameraDescription camera) {
-    // Adjust rotation based on camera sensor orientation
-    if (camera.lensDirection == CameraLensDirection.front) {
-      return InputImageRotation.rotation270deg; // Front camera often needs this
-    } else {
-      return InputImageRotation.rotation90deg; // Back camera
+    switch (camera.sensorOrientation) {
+      case 0:
+        return InputImageRotation.rotation0deg;
+      case 90:
+        return InputImageRotation.rotation90deg;
+      case 180:
+        return InputImageRotation.rotation180deg;
+      case 270:
+        return InputImageRotation.rotation270deg;
+      default:
+        return InputImageRotation.rotation0deg; // Fallback
     }
   }
 
