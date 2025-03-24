@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
-import 'package:facewise/face_detect.dart';
+import 'package:facewise/face_detect.dart'; // Assuming this is your custom processor
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 class FaceDetectionScreen extends StatefulWidget {
@@ -23,9 +23,12 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       performanceMode: FaceDetectorMode.accurate,
     ),
   );
-  String _status = 'Initializing...';
-  int _currentCameraIndex = 1; // 0 for front, 1 for back (if available)
-  List<double>? _processedFace;
+  final ValueNotifier<String> _status = ValueNotifier('Initializing...');
+  final ValueNotifier<List<double>?> _processedFace = ValueNotifier(null);
+  int _currentCameraIndex = 1; // 0 for front, 1 for back
+  bool _isProcessing = false;
+  DateTime? _lastProcessed;
+  bool _isCameraInitialized = false; // Track initialization state
 
   @override
   void initState() {
@@ -35,99 +38,99 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
 
   Future<void> _initializeCamera() async {
     if (widget.cameras.isEmpty) {
-      setState(() => _status = 'No cameras available');
+      _status.value = 'No cameras available';
+      setState(() => _isCameraInitialized = false);
       return;
     }
+
     _controller = CameraController(
       widget.cameras[_currentCameraIndex],
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       enableAudio: false,
     );
-    await _controller.initialize();
-    _controller.startImageStream(_processImage);
-    setState(() {
-      // _status = 'Detecting...';
-    });
+
+    try {
+      await _controller.initialize();
+      await _controller.startImageStream(_processImage);
+      setState(() {
+        _isCameraInitialized = true; // Update state when ready
+        _status.value = 'Detecting...';
+      });
+    } catch (e) {
+      setState(() {
+        _isCameraInitialized = false;
+        _status.value = 'Error initializing camera: $e';
+      });
+    }
   }
 
-  int _frameCounter = 0;
   void _processImage(CameraImage image) async {
-    _frameCounter++;
-    if (_frameCounter % 5 != 0) return;
+    final now = DateTime.now();
+    if (_lastProcessed != null && now.difference(_lastProcessed!).inMilliseconds < 200) return;
+    if (_isProcessing) return;
 
-    final formatGroup = image.format.group;
-    Uint8List bytes;
-    InputImageFormat format;
+    _isProcessing = true;
+    _lastProcessed = now;
 
-    switch (formatGroup) {
-      case ImageFormatGroup.yuv420: // YUV_420_888 on Android
-        if (image.planes.length < 3) {
-          throw Exception("YUV420 image must have 3 planes (Y, U, V)");
-        }
-        // Combine Y, U, and V planes into a single ByteBuffer
-        final yPlane = image.planes[0].bytes;
-        final uPlane = image.planes[1].bytes;
-        final vPlane = image.planes[2].bytes;
+    try {
+      final formatGroup = image.format.group;
+      Uint8List bytes;
+      InputImageFormat format;
 
-        final totalSize = yPlane.length + uPlane.length + vPlane.length;
-        bytes = Uint8List(totalSize);
+      switch (formatGroup) {
+        case ImageFormatGroup.yuv420:
+          if (image.planes.length < 3) {
+            throw Exception("YUV420 image must have 3 planes (Y, U, V)");
+          }
+          final yPlane = image.planes[0].bytes;
+          final uPlane = image.planes[1].bytes;
+          final vPlane = image.planes[2].bytes;
+          final totalSize = yPlane.length + uPlane.length + vPlane.length;
+          bytes = Uint8List(totalSize);
+          bytes.setRange(0, yPlane.length, yPlane);
+          bytes.setRange(yPlane.length, yPlane.length + uPlane.length, uPlane);
+          bytes.setRange(yPlane.length + uPlane.length, totalSize, vPlane);
+          format = InputImageFormat.yuv_420_888;
+          break;
 
-        // Copy Y plane
-        bytes.setRange(0, yPlane.length, yPlane);
-        // Copy U plane
-        bytes.setRange(yPlane.length, yPlane.length + uPlane.length, uPlane);
-        // Copy V plane
-        bytes.setRange(yPlane.length + uPlane.length, totalSize, vPlane);
+        case ImageFormatGroup.nv21:
+          bytes = image.planes[0].bytes;
+          format = InputImageFormat.nv21;
+          break;
 
-        format = InputImageFormat.yuv_420_888;
-        break;
+        default:
+          throw Exception("Unsupported image format: $formatGroup");
+      }
 
-      case ImageFormatGroup.nv21: // NV21 on some Android devices
-        // NV21 is already a single contiguous buffer
-        bytes = image.planes[0].bytes;
-        format = InputImageFormat.nv21; // NV21 is supported
-        break;
-
-      default:
-        throw Exception("Unsupported image format: $formatGroup");
-    }
-
-    // Create InputImage with the appropriate format
-    final inputImage = InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: _getRotationForCamera(widget.cameras[_currentCameraIndex]),
-        format: format,
-        bytesPerRow: image.planes[0].bytesPerRow,
-      ),
-    );
-
-    _frameCounter = 0;
-
-    final faces = await _faceDetector.processImage(inputImage);
-
-    if (faces.isNotEmpty) {
-      final faceBytes = await FaceProcessor.processFace(
-        cameraImage: image,
-        face: faces[0],
-        sensorOrientation:
-            widget.cameras[_currentCameraIndex].sensorOrientation,
+      final inputImage = InputImage.fromBytes(
+        bytes: bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: _getRotationForCamera(widget.cameras[_currentCameraIndex]),
+          format: format,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        ),
       );
 
-      setState(() {
-        _status = "face detected";
-        if (faceBytes != null) {
-          _processedFace = faceBytes;
-        }
-      });
-      print("face detected");
-      print(faceBytes);
+      final faces = await _faceDetector.processImage(inputImage);
 
-    } else {
-      setState(() {
-        _status = "face not detected";
-      });
+      if (faces.isNotEmpty) {
+        final faceBytes = await FaceProcessor.processFace(
+          cameraImage: image,
+          face: faces[0],
+          sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
+        );
+
+        _status.value = "Face detected";
+        _processedFace.value = faceBytes;
+        print(faceBytes);
+      } else {
+        _status.value = "Face not detected";
+      }
+    } catch (e) {
+      _status.value = "Error: $e";
+    } finally {
+      _isProcessing = false;
     }
   }
 
@@ -142,40 +145,40 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       case 270:
         return InputImageRotation.rotation270deg;
       default:
-        return InputImageRotation.rotation0deg; // Fallback
+        return InputImageRotation.rotation0deg;
     }
   }
 
   Future<void> _switchCamera() async {
     if (widget.cameras.length < 2) {
-      setState(() => _status = 'Only one camera available');
+      _status.value = 'Only one camera available';
       return;
     }
 
-    // Stop the current stream and dispose of the controller
     await _controller.stopImageStream();
-    await _controller.dispose();
-
-    // Toggle camera index
     _currentCameraIndex = (_currentCameraIndex + 1) % widget.cameras.length;
-
-    // Reinitialize with the new camera
-    await _initializeCamera();
-    setState(() {});
+    await _controller.setDescription(widget.cameras[_currentCameraIndex]);
+    await _controller.startImageStream(_processImage);
   }
 
   @override
   void dispose() {
+    _controller.stopImageStream();
     _controller.dispose();
     _faceDetector.close();
+    _status.dispose();
+    _processedFace.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+    if (!_isCameraInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -183,12 +186,15 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
           Positioned(
             bottom: 20,
             left: 20,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.black54,
-              child: Text(
-                _status,
-                style: const TextStyle(color: Colors.white, fontSize: 18),
+            child: ValueListenableBuilder<String>(
+              valueListenable: _status,
+              builder: (context, status, child) => Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.black54,
+                child: Text(
+                  status,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
               ),
             ),
           ),
