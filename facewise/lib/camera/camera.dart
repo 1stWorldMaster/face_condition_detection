@@ -86,7 +86,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         break;
 
       case ImageFormatGroup.nv21: // NV21 on some Android devices
-        // NV21 is already a single contiguous buffer
+      // NV21 is already a single contiguous buffer
         bytes = image.planes[0].bytes;
         format = InputImageFormat.nv21; // NV21 is supported
         break;
