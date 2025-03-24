@@ -5,7 +5,7 @@ import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 class FaceProcessor {
-  static Future<Uint8List?> processFace({
+  static Future<List<double>?> processFace({
     required CameraImage cameraImage,
     required Face face,
     required int sensorOrientation, // Camera sensor orientation (e.g., 90, 180, 270)
@@ -71,13 +71,13 @@ class FaceProcessor {
       // Print the model output for debugging
       print('Model output: $output');
 
-      // Step 8: Convert to Uint8List (JPEG bytes) for return
-      final imageBytes = Uint8List.fromList(img.encodeJpg(grayscaleFace));
+      // Step 8: Return the inference output (flattened from [1, 7] to List<double>)
+      final inferenceResult = output[0]; // Extract the first (and only) row
 
       // Close the interpreter to free resources
       interpreter.close();
 
-      return imageBytes;
+      return inferenceResult; // Returns List<double> with 7 values
     } catch (e) {
       print("Error processing face: $e");
       return null;

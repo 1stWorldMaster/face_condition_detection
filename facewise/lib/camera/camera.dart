@@ -25,7 +25,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   );
   String _status = 'Initializing...';
   int _currentCameraIndex = 1; // 0 for front, 1 for back (if available)
-  Uint8List? _processedFace;
+  List<double>? _processedFace;
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   int _frameCounter = 0;
   void _processImage(CameraImage image) async {
     _frameCounter++;
-    if (_frameCounter % 10 != 0) return;
+    if (_frameCounter % 5 != 0) return;
 
     final formatGroup = image.format.group;
     Uint8List bytes;
@@ -83,7 +83,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         break;
 
       case ImageFormatGroup.nv21: // NV21 on some Android devices
-      // NV21 is already a single contiguous buffer
+        // NV21 is already a single contiguous buffer
         bytes = image.planes[0].bytes;
         format = InputImageFormat.nv21; // NV21 is supported
         break;
@@ -111,7 +111,8 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       final faceBytes = await FaceProcessor.processFace(
         cameraImage: image,
         face: faces[0],
-        sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
+        sensorOrientation:
+            widget.cameras[_currentCameraIndex].sensorOrientation,
       );
 
       setState(() {
@@ -121,12 +122,8 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         }
       });
       print("face detected");
+      print(faceBytes);
 
-      final result = await FaceProcessor.processFace(
-        cameraImage: image,
-        face: faces[0],
-        sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
-      );
     } else {
       setState(() {
         _status = "face not detected";
@@ -203,13 +200,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
               child: const Icon(Icons.flip_camera_android),
             ),
           ),
-          if (_processedFace != null)
-            Positioned(
-              // Added Positioned widget to place the image properly in the Stack
-              top: 40,
-              left: 20,
-              child: Image.memory(_processedFace!, width: 48, height: 48),
-            ),
         ],
       ),
     );
