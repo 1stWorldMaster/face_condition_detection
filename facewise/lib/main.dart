@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:facewise/camera.dart'; // Ensure this contains FaceDetectionScreen
+import 'package:facewise/camera.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

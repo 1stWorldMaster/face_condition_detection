@@ -12,7 +12,7 @@ class FaceProcessor {
     if (_interpreter == null) {
       _interpreter = await Interpreter.fromAsset('assets/model.tflite');
       _inputBuffer = Float32List(1 * 48 * 48 * 1); // Pre-allocate input buffer
-    }
+    }// Ensure this contains FaceDetectionScreen
   }
 
   static Future<List<double>?> processFace({

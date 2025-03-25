@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:facewise/face_detect.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'dart:math' as math;
+import 'image_format_utils.dart';
 
 class FaceDetectionScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -76,31 +76,8 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       _analyzeBrightness(image);
       await _adjustExposureAutomatically();
 
-      final formatGroup = image.format.group;
-      Uint8List bytes;
-      InputImageFormat format;
-
-      switch (formatGroup) {
-        case ImageFormatGroup.yuv420:
-          final yPlane = image.planes[0].bytes;
-          final uPlane = image.planes[1].bytes;
-          final vPlane = image.planes[2].bytes;
-          final totalSize = yPlane.length + uPlane.length + vPlane.length;
-          bytes = Uint8List(totalSize)
-            ..setRange(0, yPlane.length, yPlane)
-            ..setRange(yPlane.length, yPlane.length + uPlane.length, uPlane)
-            ..setRange(yPlane.length + uPlane.length, totalSize, vPlane);
-          format = InputImageFormat.yuv_420_888;
-          break;
-
-        case ImageFormatGroup.nv21:
-          bytes = image.planes[0].bytes;
-          format = InputImageFormat.nv21;
-          break;
-
-        default:
-          throw Exception("Unsupported image format: $formatGroup");
-      }
+      final bytes = ImageFormatUtils.convertToBytes(image, outputFormat: ImageFormatUtils.getInputImageFormat(image.format.group));
+      final format = ImageFormatUtils.getInputImageFormat(image.format.group);
 
       final inputImage = InputImage.fromBytes(
         bytes: bytes,
@@ -155,13 +132,12 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     try {
       const double tooBrightThreshold = 0.6;
       const double tooDimThreshold = 0.3;
-      const double step = 0.5; // Increased step size for more noticeable exposure adjustment
+      const double step = 0.5;
 
       final minExposure = await _controller.getMinExposureOffset();
       final maxExposure = await _controller.getMaxExposureOffset();
       double newExposureOffset = _exposureOffset.value;
 
-      // Handle brightness too high
       if (_currentBrightness.value > tooBrightThreshold) {
         newExposureOffset = math.max(minExposure, _exposureOffset.value - step);
         if (_isFlashOn) {
@@ -169,7 +145,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
           _isFlashOn = false;
         }
       }
-      // Handle brightness too low
       else if (_currentBrightness.value < tooDimThreshold && _currentCameraIndex == 0) {
         newExposureOffset = math.min(maxExposure, _exposureOffset.value + step);
         if (!_isFlashOn) {
@@ -177,19 +152,17 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
           _isFlashOn = true;
         }
       }
-      // Handle normal brightness range
       else if (_isFlashOn) {
         await _controller.setFlashMode(FlashMode.off);
         _isFlashOn = false;
       }
 
-      // Apply exposure change if needed
       if (newExposureOffset != _exposureOffset.value) {
         await _controller.setExposureOffset(newExposureOffset);
         _exposureOffset.value = newExposureOffset;
       }
     } catch (e) {
-      _status.value = "Exposure/Flash error: $e"; // Temporary for debugging
+      _status.value = "Exposure/Flash error: $e";
     }
   }
 
