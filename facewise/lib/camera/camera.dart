@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
-import 'package:facewise/face_detect.dart'; // Assuming this is your custom processor
+import 'package:facewise/face_detect.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'dart:math' as math;
 
@@ -16,25 +16,18 @@ class FaceDetectionScreen extends StatefulWidget {
 class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   late CameraController _controller;
   final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(
-      enableClassification: false,
-      enableContours: false,
-      enableLandmarks: false,
-      enableTracking: false,
-      performanceMode: FaceDetectorMode.accurate,
-    ),
+    options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate),
   );
   final ValueNotifier<String> _status = ValueNotifier('Initializing...');
   final ValueNotifier<List<double>?> _processedFace = ValueNotifier(null);
   final ValueNotifier<double> _currentBrightness = ValueNotifier(0.0);
   final ValueNotifier<double> _exposureOffset = ValueNotifier(0.0);
-  int _currentCameraIndex = 1; // 0 for front, 1 for back
+  int _currentCameraIndex = 1;
   bool _isProcessing = false;
   DateTime? _lastProcessed;
   bool _isCameraInitialized = false;
-  bool _isFlashOn = false; // Track flashlight state
+  bool _isFlashOn = false;
 
-  // List of emotions
   final List<String> emotions = ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"];
 
   @override
@@ -59,7 +52,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     try {
       await _controller.initialize();
       await _controller.startImageStream(_processImage);
-      print("Camera stream started successfully");
       setState(() {
         _isCameraInitialized = true;
         _status.value = 'Detecting...';
@@ -69,7 +61,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         _isCameraInitialized = false;
         _status.value = 'Error initializing camera: $e';
       });
-      print("Camera initialization error: $e");
     }
   }
 
@@ -82,7 +73,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _lastProcessed = now;
 
     try {
-      // Brightness analysis and exposure adjustment
       _analyzeBrightness(image);
       await _adjustExposureAutomatically();
 
@@ -92,17 +82,14 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
 
       switch (formatGroup) {
         case ImageFormatGroup.yuv420:
-          if (image.planes.length < 3) {
-            throw Exception("YUV420 image must have 3 planes (Y, U, V)");
-          }
           final yPlane = image.planes[0].bytes;
           final uPlane = image.planes[1].bytes;
           final vPlane = image.planes[2].bytes;
           final totalSize = yPlane.length + uPlane.length + vPlane.length;
-          bytes = Uint8List(totalSize);
-          bytes.setRange(0, yPlane.length, yPlane);
-          bytes.setRange(yPlane.length, yPlane.length + uPlane.length, uPlane);
-          bytes.setRange(yPlane.length + uPlane.length, totalSize, vPlane);
+          bytes = Uint8List(totalSize)
+            ..setRange(0, yPlane.length, yPlane)
+            ..setRange(yPlane.length, yPlane.length + uPlane.length, uPlane)
+            ..setRange(yPlane.length + uPlane.length, totalSize, vPlane);
           format = InputImageFormat.yuv_420_888;
           break;
 
@@ -137,10 +124,8 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         _processedFace.value = faceBytes;
 
         if (faceBytes != null && faceBytes.length == emotions.length) {
-          final maxProbIndex = faceBytes.indexOf(faceBytes.reduce((a, b) => a > b ? a : b));
-          final detectedEmotion = emotions[maxProbIndex];
-          final probability = faceBytes[maxProbIndex];
-          _status.value = "$detectedEmotion (${(probability * 100).toStringAsFixed(1)}%)";
+          final maxProbIndex = faceBytes.indexOf(faceBytes.reduce(math.max));
+          _status.value = "${emotions[maxProbIndex]} (${(faceBytes[maxProbIndex] * 100).toStringAsFixed(1)}%)";
         } else {
           _status.value = "Face detected";
         }
@@ -149,7 +134,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       }
     } catch (e) {
       _status.value = "Error: $e";
-      print("Processing error: $e");
     } finally {
       _isProcessing = false;
     }
@@ -160,22 +144,11 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     final pixelCount = image.width * image.height;
     double totalLuminance = 0;
 
-    print("Image format: ${image.format.group}");
-    print("Width: ${image.width}, Height: ${image.height}");
-    print("Y Buffer length: ${yBuffer.length}");
-
-    if (yBuffer.isEmpty) {
-      print("Y buffer is empty!");
-      return;
-    }
-
     for (int i = 0; i < pixelCount; i++) {
       totalLuminance += yBuffer[i];
     }
 
-    final avgLuminance = totalLuminance / pixelCount;
-    _currentBrightness.value = avgLuminance / 255; // Normalize to 0-1
-    print("Brightness calculated: ${_currentBrightness.value}");
+    _currentBrightness.value = totalLuminance / pixelCount / 255;
   }
 
   Future<void> _adjustExposureAutomatically() async {
@@ -186,43 +159,30 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
 
       final minExposure = await _controller.getMinExposureOffset();
       final maxExposure = await _controller.getMaxExposureOffset();
-      print("Exposure range: $minExposure to $maxExposure");
-
       double newExposureOffset = _exposureOffset.value;
 
       if (_currentBrightness.value > tooBrightThreshold) {
         newExposureOffset = math.max(minExposure, _exposureOffset.value - step);
-        // Turn off flashlight if brightness is too high
         if (_isFlashOn) {
           await _controller.setFlashMode(FlashMode.off);
           _isFlashOn = false;
-          print("Flashlight turned off due to high brightness");
         }
       } else if (_currentBrightness.value < tooDimThreshold) {
         newExposureOffset = math.min(maxExposure, _exposureOffset.value + step);
-        // Turn on flashlight if brightness is too low and back camera is active
-        if (!_isFlashOn && _currentCameraIndex == 1) { // Back camera
+        if (!_isFlashOn && _currentCameraIndex == 1) {
           await _controller.setFlashMode(FlashMode.torch);
           _isFlashOn = true;
-          print("Flashlight turned on due to low brightness");
         }
-      } else {
-        // If brightness is in a normal range, turn off flashlight
-        if (_isFlashOn) {
-          await _controller.setFlashMode(FlashMode.off);
-          _isFlashOn = false;
-          print("Flashlight turned off (normal brightness)");
-        }
+      } else if (_isFlashOn) {
+        await _controller.setFlashMode(FlashMode.off);
+        _isFlashOn = false;
       }
 
       if (newExposureOffset != _exposureOffset.value) {
         await _controller.setExposureOffset(newExposureOffset);
         _exposureOffset.value = newExposureOffset;
-        print("Exposure set to: $newExposureOffset");
       }
-    } catch (e) {
-      print("Error adjusting exposure or flash: $e");
-    }
+    } catch (e) {}
   }
 
   InputImageRotation _getRotationForCamera(CameraDescription camera) {
@@ -249,14 +209,11 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     await _controller.stopImageStream();
     _currentCameraIndex = (_currentCameraIndex + 1) % widget.cameras.length;
     await _controller.setDescription(widget.cameras[_currentCameraIndex]);
-    // Reset flashlight when switching cameras
     if (_isFlashOn) {
       await _controller.setFlashMode(FlashMode.off);
       _isFlashOn = false;
-      print("Flashlight turned off due to camera switch");
     }
     await _controller.startImageStream(_processImage);
-    print("Switched to camera index: $_currentCameraIndex");
   }
 
   @override
@@ -274,9 +231,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_isCameraInitialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -291,10 +246,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
               builder: (context, status, child) => Container(
                 padding: const EdgeInsets.all(8),
                 color: Colors.black54,
-                child: Text(
-                  status,
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
-                ),
+                child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 18)),
               ),
             ),
           ),
