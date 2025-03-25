@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:facewise/face_detect.dart'; // Assuming this is your custom processor
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'dart:math' as math;
 
 class FaceDetectionScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -25,10 +26,13 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   );
   final ValueNotifier<String> _status = ValueNotifier('Initializing...');
   final ValueNotifier<List<double>?> _processedFace = ValueNotifier(null);
+  final ValueNotifier<double> _currentBrightness = ValueNotifier(0.0);
+  final ValueNotifier<double> _exposureOffset = ValueNotifier(0.0);
   int _currentCameraIndex = 1; // 0 for front, 1 for back
   bool _isProcessing = false;
   DateTime? _lastProcessed;
   bool _isCameraInitialized = false;
+  bool _isFlashOn = false; // Track flashlight state
 
   // List of emotions
   final List<String> emotions = ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"];
@@ -55,6 +59,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     try {
       await _controller.initialize();
       await _controller.startImageStream(_processImage);
+      print("Camera stream started successfully");
       setState(() {
         _isCameraInitialized = true;
         _status.value = 'Detecting...';
@@ -64,6 +69,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         _isCameraInitialized = false;
         _status.value = 'Error initializing camera: $e';
       });
+      print("Camera initialization error: $e");
     }
   }
 
@@ -76,6 +82,10 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _lastProcessed = now;
 
     try {
+      // Brightness analysis and exposure adjustment
+      _analyzeBrightness(image);
+      await _adjustExposureAutomatically();
+
       final formatGroup = image.format.group;
       Uint8List bytes;
       InputImageFormat format;
@@ -126,7 +136,6 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
 
         _processedFace.value = faceBytes;
 
-        // Find the emotion with the highest probability
         if (faceBytes != null && faceBytes.length == emotions.length) {
           final maxProbIndex = faceBytes.indexOf(faceBytes.reduce((a, b) => a > b ? a : b));
           final detectedEmotion = emotions[maxProbIndex];
@@ -140,8 +149,79 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       }
     } catch (e) {
       _status.value = "Error: $e";
+      print("Processing error: $e");
     } finally {
       _isProcessing = false;
+    }
+  }
+
+  void _analyzeBrightness(CameraImage image) {
+    final yBuffer = image.planes[0].bytes;
+    final pixelCount = image.width * image.height;
+    double totalLuminance = 0;
+
+    print("Image format: ${image.format.group}");
+    print("Width: ${image.width}, Height: ${image.height}");
+    print("Y Buffer length: ${yBuffer.length}");
+
+    if (yBuffer.isEmpty) {
+      print("Y buffer is empty!");
+      return;
+    }
+
+    for (int i = 0; i < pixelCount; i++) {
+      totalLuminance += yBuffer[i];
+    }
+
+    final avgLuminance = totalLuminance / pixelCount;
+    _currentBrightness.value = avgLuminance / 255; // Normalize to 0-1
+    print("Brightness calculated: ${_currentBrightness.value}");
+  }
+
+  Future<void> _adjustExposureAutomatically() async {
+    try {
+      const double tooBrightThreshold = 0.8;
+      const double tooDimThreshold = 0.2;
+      const double step = 0.1;
+
+      final minExposure = await _controller.getMinExposureOffset();
+      final maxExposure = await _controller.getMaxExposureOffset();
+      print("Exposure range: $minExposure to $maxExposure");
+
+      double newExposureOffset = _exposureOffset.value;
+
+      if (_currentBrightness.value > tooBrightThreshold) {
+        newExposureOffset = math.max(minExposure, _exposureOffset.value - step);
+        // Turn off flashlight if brightness is too high
+        if (_isFlashOn) {
+          await _controller.setFlashMode(FlashMode.off);
+          _isFlashOn = false;
+          print("Flashlight turned off due to high brightness");
+        }
+      } else if (_currentBrightness.value < tooDimThreshold) {
+        newExposureOffset = math.min(maxExposure, _exposureOffset.value + step);
+        // Turn on flashlight if brightness is too low and back camera is active
+        if (!_isFlashOn && _currentCameraIndex == 1) { // Back camera
+          await _controller.setFlashMode(FlashMode.torch);
+          _isFlashOn = true;
+          print("Flashlight turned on due to low brightness");
+        }
+      } else {
+        // If brightness is in a normal range, turn off flashlight
+        if (_isFlashOn) {
+          await _controller.setFlashMode(FlashMode.off);
+          _isFlashOn = false;
+          print("Flashlight turned off (normal brightness)");
+        }
+      }
+
+      if (newExposureOffset != _exposureOffset.value) {
+        await _controller.setExposureOffset(newExposureOffset);
+        _exposureOffset.value = newExposureOffset;
+        print("Exposure set to: $newExposureOffset");
+      }
+    } catch (e) {
+      print("Error adjusting exposure or flash: $e");
     }
   }
 
@@ -169,7 +249,14 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     await _controller.stopImageStream();
     _currentCameraIndex = (_currentCameraIndex + 1) % widget.cameras.length;
     await _controller.setDescription(widget.cameras[_currentCameraIndex]);
+    // Reset flashlight when switching cameras
+    if (_isFlashOn) {
+      await _controller.setFlashMode(FlashMode.off);
+      _isFlashOn = false;
+      print("Flashlight turned off due to camera switch");
+    }
     await _controller.startImageStream(_processImage);
+    print("Switched to camera index: $_currentCameraIndex");
   }
 
   @override
@@ -179,6 +266,8 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     _faceDetector.close();
     _status.dispose();
     _processedFace.dispose();
+    _currentBrightness.dispose();
+    _exposureOffset.dispose();
     super.dispose();
   }
 
@@ -205,6 +294,24 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
                 child: Text(
                   status,
                   style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 60,
+            left: 20,
+            child: ValueListenableBuilder<double>(
+              valueListenable: _currentBrightness,
+              builder: (context, brightness, child) => ValueListenableBuilder<double>(
+                valueListenable: _exposureOffset,
+                builder: (context, exposure, child) => Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.black54,
+                  child: Text(
+                    "Brightness: ${brightness.toStringAsFixed(2)} | Exposure: ${exposure.toStringAsFixed(2)}",
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
                 ),
               ),
             ),
