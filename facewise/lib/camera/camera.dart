@@ -22,7 +22,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
   final ValueNotifier<List<double>?> _processedFace = ValueNotifier(null);
   final ValueNotifier<double> _currentBrightness = ValueNotifier(0.0);
   final ValueNotifier<double> _exposureOffset = ValueNotifier(0.0);
-  int _currentCameraIndex = 1;
+  int _currentCameraIndex = 0;
   bool _isProcessing = false;
   DateTime? _lastProcessed;
   bool _isCameraInitialized = false;
@@ -153,36 +153,44 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
 
   Future<void> _adjustExposureAutomatically() async {
     try {
-      const double tooBrightThreshold = 0.8;
-      const double tooDimThreshold = 0.2;
-      const double step = 0.1;
+      const double tooBrightThreshold = 0.6;
+      const double tooDimThreshold = 0.3;
+      const double step = 0.5; // Increased step size for more noticeable exposure adjustment
 
       final minExposure = await _controller.getMinExposureOffset();
       final maxExposure = await _controller.getMaxExposureOffset();
       double newExposureOffset = _exposureOffset.value;
 
+      // Handle brightness too high
       if (_currentBrightness.value > tooBrightThreshold) {
         newExposureOffset = math.max(minExposure, _exposureOffset.value - step);
         if (_isFlashOn) {
           await _controller.setFlashMode(FlashMode.off);
           _isFlashOn = false;
         }
-      } else if (_currentBrightness.value < tooDimThreshold) {
+      }
+      // Handle brightness too low
+      else if (_currentBrightness.value < tooDimThreshold && _currentCameraIndex == 0) {
         newExposureOffset = math.min(maxExposure, _exposureOffset.value + step);
-        if (!_isFlashOn && _currentCameraIndex == 1) {
+        if (!_isFlashOn) {
           await _controller.setFlashMode(FlashMode.torch);
           _isFlashOn = true;
         }
-      } else if (_isFlashOn) {
+      }
+      // Handle normal brightness range
+      else if (_isFlashOn) {
         await _controller.setFlashMode(FlashMode.off);
         _isFlashOn = false;
       }
 
+      // Apply exposure change if needed
       if (newExposureOffset != _exposureOffset.value) {
         await _controller.setExposureOffset(newExposureOffset);
         _exposureOffset.value = newExposureOffset;
       }
-    } catch (e) {}
+    } catch (e) {
+      _status.value = "Exposure/Flash error: $e"; // Temporary for debugging
+    }
   }
 
   InputImageRotation _getRotationForCamera(CameraDescription camera) {
