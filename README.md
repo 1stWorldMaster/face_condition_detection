@@ -2,10 +2,9 @@
 
 ## Overview
 
-This Flutter project implements a face detection pipeline that processes an image stream from a mobile device's camera to detect and analyze faces in real-time. The pipeline leverages the `google_ml_kit` package for face detection and a custom TensorFlow Lite (TFLite) model for face detection inference. It is designed to handle a continuous stream of images, optimize performance by throttling laggy frames, and display the results on the screen.
+This Flutter project implements a face condition detection pipeline that processes an image stream from a mobile device's camera to detect and analyze faces in real-time, across various lighting environments. The pipeline leverages the google_ml_kit package for face detection and a custom TensorFlow Lite (TFLite) model for face condition inference. It is designed to handle a continuous stream of images, optimize performance by throttling laggy frames, and display the results on the screen, even in challenging lighting conditions such as overly bright or dim environments.
 
-This application is suitable for use cases such as real-time face detection on mobile devices, user authentication, or interactive media applications.
-
+The application detects a person's face and analyzes its condition, identifying states such as tiredness, stress, happiness, or sadness. It dynamically adjusts face detection to ensure accuracy and speed in all lighting scenarios. Developed in Flutter, it is compatible with both Android and iOS platforms (testing on one is acceptable, with debug info provided if issues arise on the other). This app is ideal for use cases like real-time face condition monitoring on mobile devices, user authentication, or interactive media applications requiring robust performance across diverse lighting conditions.
 ## Features
 
 - Processes a live image stream from the device's camera.
@@ -47,6 +46,8 @@ The pipeline follows these steps to process the image stream:
 
 9. **Show Answer on the Screen**  
    The results of the face detection (e.g., bounding boxes, confidence scores, or labels) are overlaid on the camera preview and displayed on the screen.
+
+![pipeline](design/pipeline.png)
 
 ## Requirements
 
@@ -114,3 +115,7 @@ flutter run
 ## Special Thanks and Assets Usage
 
 The TensorFlow model utilized for emotion detection is sourced from https://github.com/maelfabien/Multimodal-Emotion-Recognition. Specifically, the model employed is located within the directory `Multimodal-Emotion-Recognition/03-Video/Models/EmotionXCeption`. Many thanks to the creators for providing this valuable resource!
+
+
+## How app look
+![app Image](design/image.png)
