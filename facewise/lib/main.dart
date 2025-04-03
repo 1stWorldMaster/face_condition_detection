@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:facewise/camera.dart';
+import 'package:facewise/home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

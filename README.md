@@ -49,6 +49,35 @@ The pipeline follows these steps to process the image stream:
 
 ![pipeline](design/pipeline.png)
 
+## Logic for the brightness convert
+
+**Constants:**
+- `tooBrightThreshold = 0.6`: Upper brightness limit (60% of max)  
+- `tooDimThreshold = 0.3`: Lower brightness limit (30% of max)  
+- `step = 0.5`: Exposure adjustment increment  
+
+**Exposure Limits:**
+- Gets minimum and maximum exposure offsets from the camera controller  
+
+**Adjustment Logic:**
+- **Too Bright (> 0.6):**  
+  - Reduces exposure by `step`, respecting the minimum limit  
+  - Turns off flash if it's on  
+- **Too Dim (< 0.3) (only for main camera, index 0):**  
+  - Increases exposure by `step`, respecting the maximum limit  
+  - Turns on flash (torch mode) if it's off  
+- **Normal Range:**  
+  - Turns off flash if it was on  
+
+**Apply Changes:**
+- Updates exposure offset if it changed  
+- Stores new value in `exposureOffset.value`  
+
+**Error Handling:**
+- Catches any errors and updates `status.value` with the error message  
+
+
+
 ## Requirements
 
 To run this project, you will need the following:
@@ -119,3 +148,64 @@ The TensorFlow model utilized for emotion detection is sourced from https://gith
 
 ## How app look
 ![app Image](design/image.png)
+
+## Tested
+Works well on the physical device and the emulator configuration listed below.
+
+**Physical device**
+tested on `F22-128Gb-6Gb`
+ 
+
+**Emulator**
+```
+Properties
+avd.ini.displayname              Medium Phone
+avd.ini.encoding                 UTF-8
+AvdId                            Medium_Phone
+disk.dataPartition.size          6G
+fastboot.chosenSnapshotFile      
+fastboot.forceChosenSnapshotBoot no
+fastboot.forceColdBoot           no
+fastboot.forceFastBoot           yes
+hw.accelerometer                 yes
+hw.arc                           false
+hw.audioInput                    yes
+hw.battery                       yes
+hw.camera.back                   virtualscene
+hw.camera.front                  webcam0
+hw.cpu.ncore                     4
+hw.device.hash2                  MD5:2016577e1656e8e7c2adb0fac972beea
+hw.device.manufacturer           Generic
+hw.device.name                   medium_phone
+hw.dPad                          no
+hw.gps                           yes
+hw.gpu.enabled                   yes
+hw.gpu.mode                      auto
+hw.gyroscope                     yes
+hw.initialOrientation            portrait
+hw.keyboard                      yes
+hw.lcd.density                   420
+hw.lcd.height                    2400
+hw.lcd.width                     1080
+hw.mainKeys                      no
+hw.ramSize                       2048
+hw.sdCard                        yes
+hw.sensors.light                 yes
+hw.sensors.magnetic_field        yes
+hw.sensors.orientation           yes
+hw.sensors.pressure              yes
+hw.sensors.proximity             yes
+hw.trackBall                     no
+image.androidVersion.api         35
+image.sysdir.1                   system-images/android-35/google_apis_playstore/x86_64/
+PlayStore.enabled                true
+runtime.network.latency          none
+runtime.network.speed            full
+showDeviceFrame                  yes
+skin.dynamic                     yes
+tag.display                      Google Play
+tag.displaynames                 Google Play
+tag.id                           google_apis_playstore
+tag.ids                          google_apis_playstore
+vm.heapSize                      228
+```

@@ -5,62 +5,51 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'dart:math' as math;
 import 'image_format_utils.dart';
 
-class FaceDetectionScreen extends StatefulWidget {
+
+class CameraLogic {
   final List<CameraDescription> cameras;
-  const FaceDetectionScreen({super.key, required this.cameras});
-
-  @override
-  State<FaceDetectionScreen> createState() => _FaceDetectionScreenState();
-}
-
-class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
-  late CameraController _controller;
+  late CameraController controller;
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate),
   );
-  final ValueNotifier<String> _status = ValueNotifier('Initializing...');
-  final ValueNotifier<List<double>?> _processedFace = ValueNotifier(null);
-  final ValueNotifier<double> _currentBrightness = ValueNotifier(0.0);
-  final ValueNotifier<double> _exposureOffset = ValueNotifier(0.0);
+  final ValueNotifier<String> status = ValueNotifier('Initializing...');
+  final ValueNotifier<List<double>?> processedFace = ValueNotifier(null);
+  final ValueNotifier<double> currentBrightness = ValueNotifier(0.0);
+  final ValueNotifier<double> exposureOffset = ValueNotifier(0.0);
   int _currentCameraIndex = 0;
   bool _isProcessing = false;
   DateTime? _lastProcessed;
-  bool _isCameraInitialized = false;
+  bool isCameraInitialized = false;
   bool _isFlashOn = false;
-
+  final VoidCallback updateState;
   final List<String> emotions = ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"];
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeCamera();
-  }
+  CameraLogic(this.cameras, this.updateState);
 
-  Future<void> _initializeCamera() async {
-    if (widget.cameras.isEmpty) {
-      _status.value = 'No cameras available';
-      setState(() => _isCameraInitialized = false);
+  Future<void> initialize() async {
+    if (cameras.isEmpty) {
+      status.value = 'No cameras available';
+      isCameraInitialized = false;
+      updateState();
       return;
     }
 
-    _controller = CameraController(
-      widget.cameras[_currentCameraIndex],
+    controller = CameraController(
+      cameras[_currentCameraIndex],
       ResolutionPreset.low,
       enableAudio: false,
     );
 
     try {
-      await _controller.initialize();
-      await _controller.startImageStream(_processImage);
-      setState(() {
-        _isCameraInitialized = true;
-        _status.value = 'Detecting...';
-      });
+      await controller.initialize();
+      await controller.startImageStream(_processImage);
+      isCameraInitialized = true;
+      status.value = 'Detecting...';
+      updateState();
     } catch (e) {
-      setState(() {
-        _isCameraInitialized = false;
-        _status.value = 'Error initializing camera: $e';
-      });
+      isCameraInitialized = false;
+      status.value = 'Error initializing camera: $e';
+      updateState();
     }
   }
 
@@ -83,7 +72,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         bytes: bytes,
         metadata: InputImageMetadata(
           size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: _getRotationForCamera(widget.cameras[_currentCameraIndex]),
+          rotation: _getRotationForCamera(cameras[_currentCameraIndex]),
           format: format,
           bytesPerRow: image.planes[0].bytesPerRow,
         ),
@@ -95,22 +84,22 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
         final faceBytes = await FaceProcessor.processFace(
           cameraImage: image,
           face: faces[0],
-          sensorOrientation: widget.cameras[_currentCameraIndex].sensorOrientation,
+          sensorOrientation: cameras[_currentCameraIndex].sensorOrientation,
         );
 
-        _processedFace.value = faceBytes;
+        processedFace.value = faceBytes;
 
         if (faceBytes != null && faceBytes.length == emotions.length) {
           final maxProbIndex = faceBytes.indexOf(faceBytes.reduce(math.max));
-          _status.value = "${emotions[maxProbIndex]} (${(faceBytes[maxProbIndex] * 100).toStringAsFixed(1)}%)";
+          status.value = "${emotions[maxProbIndex]} (${(faceBytes[maxProbIndex] * 100).toStringAsFixed(1)}%)";
         } else {
-          _status.value = "Face detected";
+          status.value = "Face detected";
         }
       } else {
-        _status.value = "Face not detected";
+        status.value = "Face not detected";
       }
     } catch (e) {
-      _status.value = "Error: $e";
+      status.value = "Error: $e";
     } finally {
       _isProcessing = false;
     }
@@ -125,7 +114,7 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       totalLuminance += yBuffer[i];
     }
 
-    _currentBrightness.value = totalLuminance / pixelCount / 255;
+    currentBrightness.value = totalLuminance / pixelCount / 255;
   }
 
   Future<void> _adjustExposureAutomatically() async {
@@ -134,35 +123,33 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
       const double tooDimThreshold = 0.3;
       const double step = 0.5;
 
-      final minExposure = await _controller.getMinExposureOffset();
-      final maxExposure = await _controller.getMaxExposureOffset();
-      double newExposureOffset = _exposureOffset.value;
+      final minExposure = await controller.getMinExposureOffset();
+      final maxExposure = await controller.getMaxExposureOffset();
+      double newExposureOffset = exposureOffset.value;
 
-      if (_currentBrightness.value > tooBrightThreshold) {
-        newExposureOffset = math.max(minExposure, _exposureOffset.value - step);
+      if (currentBrightness.value > tooBrightThreshold) {
+        newExposureOffset = math.max(minExposure, exposureOffset.value - step);
         if (_isFlashOn) {
-          await _controller.setFlashMode(FlashMode.off);
+          await controller.setFlashMode(FlashMode.off);
           _isFlashOn = false;
         }
-      }
-      else if (_currentBrightness.value < tooDimThreshold && _currentCameraIndex == 0) {
-        newExposureOffset = math.min(maxExposure, _exposureOffset.value + step);
+      } else if (currentBrightness.value < tooDimThreshold && _currentCameraIndex == 0) {
+        newExposureOffset = math.min(maxExposure, exposureOffset.value + step);
         if (!_isFlashOn) {
-          await _controller.setFlashMode(FlashMode.torch);
+          await controller.setFlashMode(FlashMode.torch);
           _isFlashOn = true;
         }
-      }
-      else if (_isFlashOn) {
-        await _controller.setFlashMode(FlashMode.off);
+      } else if (_isFlashOn) {
+        await controller.setFlashMode(FlashMode.off);
         _isFlashOn = false;
       }
 
-      if (newExposureOffset != _exposureOffset.value) {
-        await _controller.setExposureOffset(newExposureOffset);
-        _exposureOffset.value = newExposureOffset;
+      if (newExposureOffset != exposureOffset.value) {
+        await controller.setExposureOffset(newExposureOffset);
+        exposureOffset.value = newExposureOffset;
       }
     } catch (e) {
-      _status.value = "Exposure/Flash error: $e";
+      status.value = "Exposure/Flash error: $e";
     }
   }
 
@@ -181,84 +168,31 @@ class _FaceDetectionScreenState extends State<FaceDetectionScreen> {
     }
   }
 
-  Future<void> _switchCamera() async {
-    if (widget.cameras.length < 2) {
-      _status.value = 'Only one camera available';
+  // Function to switch the camera
+  Future<void> switchCamera() async {
+    if (cameras.length < 2) {
+      status.value = 'Only one camera available';
       return;
     }
 
-    await _controller.stopImageStream();
-    _currentCameraIndex = (_currentCameraIndex + 1) % widget.cameras.length;
-    await _controller.setDescription(widget.cameras[_currentCameraIndex]);
+    await controller.stopImageStream();
+    _currentCameraIndex = (_currentCameraIndex + 1) % cameras.length;
+    await controller.setDescription(cameras[_currentCameraIndex]);
     if (_isFlashOn) {
-      await _controller.setFlashMode(FlashMode.off);
+      await controller.setFlashMode(FlashMode.off);
       _isFlashOn = false;
     }
-    await _controller.startImageStream(_processImage);
+    await controller.startImageStream(_processImage);
   }
 
-  @override
+// Dispose function
   void dispose() {
-    _controller.stopImageStream();
-    _controller.dispose();
+    controller.stopImageStream();
+    controller.dispose();
     _faceDetector.close();
-    _status.dispose();
-    _processedFace.dispose();
-    _currentBrightness.dispose();
-    _exposureOffset.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isCameraInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          CameraPreview(_controller),
-          Positioned(
-            bottom: 20,
-            left: 20,
-            child: ValueListenableBuilder<String>(
-              valueListenable: _status,
-              builder: (context, status, child) => Container(
-                padding: const EdgeInsets.all(8),
-                color: Colors.black54,
-                child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 18)),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 60,
-            left: 20,
-            child: ValueListenableBuilder<double>(
-              valueListenable: _currentBrightness,
-              builder: (context, brightness, child) => ValueListenableBuilder<double>(
-                valueListenable: _exposureOffset,
-                builder: (context, exposure, child) => Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.black54,
-                  child: Text(
-                    "Brightness: ${brightness.toStringAsFixed(2)} | Exposure: ${exposure.toStringAsFixed(2)}",
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 40,
-            right: 20,
-            child: FloatingActionButton(
-              onPressed: _switchCamera,
-              child: const Icon(Icons.flip_camera_android),
-            ),
-          ),
-        ],
-      ),
-    );
+    status.dispose();
+    processedFace.dispose();
+    currentBrightness.dispose();
+    exposureOffset.dispose();
   }
 }
